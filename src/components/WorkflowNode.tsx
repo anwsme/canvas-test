@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef, useState } from 'react';
-import Draggable from 'react-draggable';
+import Draggable, { DraggableEvent, DraggableData } from 'react-draggable';
 
 interface NodeInput {
   id: string;
@@ -30,7 +30,6 @@ interface WorkflowNodeProps {
   onStartConnection?: (nodeId: string, event: React.MouseEvent) => void;
   onStartDisconnection?: (nodeId: string, inputId: string, event: React.MouseEvent) => void;
   onRemoveInput?: (nodeId: string, inputId: string) => void;
-  onAddInput?: (nodeId: string) => void;
   inputConnectionStates: InputConnectionState[];
 }
 
@@ -46,13 +45,12 @@ const WorkflowNode: React.FC<WorkflowNodeProps> = ({
   onStartConnection,
   onStartDisconnection,
   onRemoveInput,
-  onAddInput,
   inputConnectionStates,
 }) => {
   const nodeRef = useRef<HTMLDivElement>(null);
   const [hoveredInputId, setHoveredInputId] = useState<string | null>(null);
 
-  const handleDrag = (e: any, data: any) => {
+  const handleDrag = (_e: DraggableEvent, data: DraggableData) => {
     onDrag(id, data.x, data.y);
   };
 
@@ -120,33 +118,36 @@ const WorkflowNode: React.FC<WorkflowNodeProps> = ({
     if (isAddInput) {
       const isActive = isInTapZone || isBeingHovered || isHovered;
       const rectWidth = isActive ? 12 : 6; // Grow on tap zone, connection hover, OR direct hover
+      const rectHeight = 12; // Fixed height to match other inputs
       
       return (
         <div 
           key={inputId}
-          className="absolute left-[-8px] z-[-2] flex items-center transition-all duration-200 ease-in-out"
+          className="absolute left-[-8px] z-[-2] flex items-center transition-all duration-300 ease-in-out"
           style={{ 
             top: inputPos.top,
-            padding: `${tapZonePadding}px`
+            padding: `${tapZonePadding}px`,
+            opacity: isActive ? 1 : 0.8, // Slightly fade in when becoming active
+            transform: isActive ? 'translateX(0)' : 'translateX(-2px)' // Slide in slightly when active
           }}
         >
-          {/* Rectangle connector - blue for ADD, grows to the left */}
+          {/* Rectangle connector - blue for ADD, grows to the left with smooth animation */}
           <div 
-            className="transition-all duration-200 ease-in-out bg-blue-500 cursor-pointer"
+            className="transition-all duration-300 ease-in-out bg-blue-500 cursor-pointer"
             style={{
               width: `${rectWidth}px`,
-              height: `${rectWidth}px`,
-              marginLeft: isActive ? '-6px' : '0px', // Grow 6px to the left (from 6px to 12px width)
+              height: `${rectHeight}px`, // Fixed height to match other inputs
+              marginLeft: isActive ? '-6px' : '0px', // Grow 6px to the left when active (from 6px to 12px width)
               borderRadius: '1px',
-              transform: 'translateY(-6px)'
+              transform: 'translateY(-6px)',
             }}
             onMouseEnter={() => setHoveredInputId(inputId)}
             onMouseLeave={() => setHoveredInputId(null)}
           ></div>
           
-          {/* ADD text - slide in animation exactly like DELETE */}
+          {/* ADD text - slide in animation */}
           <div 
-            className={`absolute right-[20px] top-[0px] text-blue-500 text-[10px] font-medium font-['IBM_Plex_Mono'] leading-[10px] uppercase tracking-wide cursor-pointer select-none whitespace-nowrap transition-all duration-200 ease-in-out ${
+            className={`absolute right-[20px] top-[0px] text-blue-500 text-[10px] font-medium font-['IBM_Plex_Mono'] leading-[10px] uppercase tracking-wide cursor-pointer select-none whitespace-nowrap transition-all duration-300 ease-in-out ${
               isActive
                 ? 'opacity-100 translate-x-0' 
                 : 'opacity-0 translate-x-2 pointer-events-none'
@@ -157,6 +158,8 @@ const WorkflowNode: React.FC<WorkflowNodeProps> = ({
         </div>
       );
     }
+
+    
 
     if (hasIncomingConnection) {
       // Show triangle when connected - but transform to rectangle if we're dragging and in tap zone
@@ -185,14 +188,15 @@ const WorkflowNode: React.FC<WorkflowNodeProps> = ({
                 height: `${rectHeight}px`,
                 marginLeft: '-3px',
                 borderRadius: '1px',
-                transform: 'translateY(-6px)'
+                transform: 'translateY(-6px)',
+                boxShadow: '0 2px 4px rgba(59, 130, 246, 0.3)' // Add shadow for better visual feedback
               }}
             ></div>
             {/* No text when showing rectangle for existing connection */}
           </div>
         );
       } else {
-        // Show normal triangle
+        // Show normal triangle with enhanced hover animation
         return (
           <div 
             key={inputId}
@@ -211,14 +215,15 @@ const WorkflowNode: React.FC<WorkflowNodeProps> = ({
                 transform: 'translateY(-6px)',
                 clipPath: 'polygon(33% 0%, 33% 100%, 100% 50%)',
                 backgroundColor: isBeingHovered ? "#3b82f6" : "#6b7280",
-                borderRadius: '4px 0 0 4px'
+                borderRadius: '4px 0 0 4px',
+                boxShadow: isBeingHovered ? '0 2px 4px rgba(59, 130, 246, 0.3)' : 'none'
               }}
             ></div>
           </div>
         );
       }
     } else {
-      // Show rectangle with delete functionality - but only show delete text if NOT dragging
+      // Show rectangle with delete functionality - enhanced animations
       // Rectangle grows from 6 to 12 when: in tap zone OR being hovered during drag OR directly hovered
       const rectWidth = (isInTapZone || isBeingHovered || isHovered) ? 12 : 6;
       const rectHeight = 12; // Match triangle height
@@ -227,13 +232,13 @@ const WorkflowNode: React.FC<WorkflowNodeProps> = ({
       return (
         <div 
           key={inputId}
-          className="absolute left-[-8px] z-[-2] flex items-center transition-all duration-200 ease-in-out" // Changed z-index to z-[-2] and added smooth positioning
+          className="absolute left-[-8px] z-[-2] flex items-center transition-all duration-200 ease-in-out"
           style={{ 
             top: inputPos.top,
             padding: `${tapZonePadding}px` // Add tap zone padding
           }}
         >
-          {/* Rectangle connector */}
+          {/* Rectangle connector with enhanced visual feedback */}
           <div 
             className={`transition-all duration-200 ease-in-out cursor-pointer ${
               shouldShowDelete ? 'bg-red-600' : (isBeingHovered ? 'bg-blue-500' : 'bg-muted-foreground')
@@ -243,19 +248,19 @@ const WorkflowNode: React.FC<WorkflowNodeProps> = ({
               height: `${rectHeight}px`,
               marginLeft: (isInTapZone || isBeingHovered || isHovered) ? '-3px' : '0px', // Adjusted for new width on any growth condition
               borderRadius: '1px',
-              transform: 'translateY(-6px)' // Center the rectangle (adjusted for 12px height)
+              transform: 'translateY(-6px)', // Center the rectangle (adjusted for 12px height)
             }}
             onMouseEnter={() => setHoveredInputId(inputId)}
             onMouseLeave={() => setHoveredInputId(null)}
             onClick={(e) => handleInputRemove(inputId, e)}
           ></div>
           
-          {/* Delete text - slide in from right with opacity - only show when not dragging */}
+          {/* Delete text - enhanced slide in animation */}
           <div 
             className={`absolute right-[20px] top-[0px] text-red-600 text-[10px] font-medium font-['IBM_Plex_Mono'] leading-[10px] uppercase tracking-wide cursor-pointer select-none whitespace-nowrap transition-all duration-200 ease-in-out ${
               shouldShowDelete
                 ? 'opacity-100 translate-x-0' 
-                : 'opacity-0 translate-x-2 pointer-events-none'
+                : 'opacity-0 translate-x-3 pointer-events-none'
             }`}
             onClick={(e) => handleInputRemove(inputId, e)}
           >
@@ -321,7 +326,7 @@ const WorkflowNode: React.FC<WorkflowNodeProps> = ({
             style={{ top: `${textTop}px` }}
           >
             {/* Node Title */}
-            <div className="text-center text-gray-900 text-sm font-normal font-['Geist'] leading-none whitespace-nowrap select-none">
+            <div className="text-center text-gray-900 text-sm font-medium font-['Geist'] leading-none whitespace-nowrap select-none">
               {title}
             </div>
             

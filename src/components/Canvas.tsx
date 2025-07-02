@@ -25,6 +25,16 @@ interface ConnectionData {
   toInputId: string;
 }
 
+interface InputConnectionState {
+  hasIncomingConnection: boolean;
+  isBeingHovered: boolean;
+  isInTapZone: boolean;
+  inputId: string;
+  inputIndex: number;
+  isAddInput?: boolean;
+  isDragging?: boolean;
+}
+
 const Canvas: React.FC = () => {
   const [nodes, setNodes] = useState<NodeData[]>([
     { 
@@ -200,18 +210,9 @@ const Canvas: React.FC = () => {
     setConnections(prev => prev.filter(conn => !(conn.toNodeId === nodeId && conn.toInputId === inputId)));
   }, []);
 
-  const handleAddInput = useCallback((nodeId: string) => {
-    setNodes(prev => prev.map(node => 
-      node.id === nodeId 
-        ? {
-            ...node,
-            inputs: [...node.inputs, { id: `input-${Date.now()}`, connected: false }]
-          }
-        : node
-    ));
-  }, []);
 
-  const isPointInNodeTapZone = (mouseX: number, mouseY: number, node: NodeData) => {
+
+  const isPointInNodeTapZone = useCallback((mouseX: number, mouseY: number, node: NodeData) => {
     const tapZoneSize = 72; // 1.5x the 48px node size
     const nodeHeight = calculateNodeHeight(node.inputs.length);
     
@@ -221,9 +222,9 @@ const Canvas: React.FC = () => {
       mouseY >= node.y - tapZoneSize / 2 &&
       mouseY <= node.y + nodeHeight + tapZoneSize / 2
     );
-  };
+  }, []);
 
-  const isPointInInputZone = (mouseX: number, mouseY: number, node: NodeData, inputIndex: number) => {
+  const isPointInInputZone = useCallback((mouseX: number, mouseY: number, node: NodeData, inputIndex: number) => {
     const tapZoneSize = 72; // 1.5x the 48px node size
     const inputPos = getInputPosition(node, inputIndex);
     
@@ -233,22 +234,9 @@ const Canvas: React.FC = () => {
       mouseY >= inputPos.y - tapZoneSize / 2 &&
       mouseY <= inputPos.y + tapZoneSize / 2
     );
-  };
+  }, []);
 
-  const isPointInInputTapZone = (mouseX: number, mouseY: number, node: NodeData, inputIndex: number) => {
-    // Tap zone for input connectors: +4pt padding on each side
-    const tapZonePadding = 4;
-    const inputPos = getInputPosition(node, inputIndex);
-    const inputWidth = 12; // Width of input connector
-    const inputHeight = 12; // Height of input connector
-    
-    return (
-      mouseX >= inputPos.x - tapZonePadding &&
-      mouseX <= inputPos.x + inputWidth + tapZonePadding &&
-      mouseY >= inputPos.y - inputHeight/2 - tapZonePadding &&
-      mouseY <= inputPos.y + inputHeight/2 + tapZonePadding
-    );
-  };
+
 
   const handleMouseMove = useCallback((event: React.MouseEvent) => {
     if (dragState.isDragging) {
@@ -301,32 +289,57 @@ const Canvas: React.FC = () => {
         }));
       }
     }
-  }, [dragState.isDragging, dragState.fromNodeId, nodes]);
+  }, [dragState.isDragging, dragState.fromNodeId, nodes, isPointInInputZone, isPointInNodeTapZone]);
 
-  const handleEndConnection = useCallback((event: React.MouseEvent) => {
+  const handleEndConnection = useCallback(() => {
     if (dragState.isDragging && dragState.fromNodeId && dragState.hoveredNodeId && dragState.isInTapZone) {
       if (dragState.canCreateNewInput) {
         // Create new input and connect to it
         const newInputId = `input-${Date.now()}`;
+        const targetNode = nodes.find(n => n.id === dragState.hoveredNodeId);
         
-        setNodes(prev => prev.map(node => 
-          node.id === dragState.hoveredNodeId 
-            ? {
-                ...node,
-                inputs: [...node.inputs, { id: newInputId, connected: true }]
-              }
-            : node
-        ));
-        
-        // Create connection to new input
-        const newConnection: ConnectionData = {
-          id: `conn_${Date.now()}`,
-          fromNodeId: dragState.fromNodeId,
-          toNodeId: dragState.hoveredNodeId,
-          toInputId: newInputId
-        };
-        
-        setConnections(prev => [...prev, newConnection]);
+        // Special handling for when this will be the second input (transition from 1 to 2)
+        if (targetNode && targetNode.inputs.length === 1) {
+          // First, update the node to have 2 inputs to trigger repositioning animation
+          setNodes(prev => prev.map(node => 
+            node.id === dragState.hoveredNodeId 
+              ? {
+                  ...node,
+                  inputs: [...node.inputs, { id: newInputId, connected: true }]
+                }
+              : node
+          ));
+          
+          // Create connection to new input
+          const newConnection: ConnectionData = {
+            id: `conn_${Date.now()}`,
+            fromNodeId: dragState.fromNodeId,
+            toNodeId: dragState.hoveredNodeId,
+            toInputId: newInputId
+          };
+          
+          setConnections(prev => [...prev, newConnection]);
+        } else {
+          // Standard behavior for nodes with multiple inputs already
+          setNodes(prev => prev.map(node => 
+            node.id === dragState.hoveredNodeId 
+              ? {
+                  ...node,
+                  inputs: [...node.inputs, { id: newInputId, connected: true }]
+                }
+              : node
+          ));
+          
+          // Create connection to new input
+          const newConnection: ConnectionData = {
+            id: `conn_${Date.now()}`,
+            fromNodeId: dragState.fromNodeId,
+            toNodeId: dragState.hoveredNodeId,
+            toInputId: newInputId
+          };
+          
+          setConnections(prev => [...prev, newConnection]);
+        }
       } else if (dragState.hoveredInputId) {
         // Connect to existing input
         const newConnection: ConnectionData = {
@@ -364,10 +377,11 @@ const Canvas: React.FC = () => {
       disconnectedConnectionId: null,
       canCreateNewInput: false
     });
-  }, [dragState]);
+  }, [dragState, nodes]);
 
   const handleCanvasMouseUp = useCallback((event: React.MouseEvent) => {
-    handleEndConnection(event);
+    event.preventDefault();
+    handleEndConnection();
   }, [handleEndConnection]);
 
   const getNodeById = (id: string) => nodes.find(n => n.id === id);
@@ -387,7 +401,7 @@ const Canvas: React.FC = () => {
   };
 
   // Get connection state for inputs
-  const getInputConnectionStates = (nodeId: string) => {
+  const getInputConnectionStates = (nodeId: string): InputConnectionState[] => {
     const node = nodes.find(n => n.id === nodeId);
     if (!node) return [];
     
@@ -398,7 +412,7 @@ const Canvas: React.FC = () => {
                          dragState.canCreateNewInput && 
                          allInputsConnected;
     
-    const states = node.inputs.map((input, index) => ({
+    const states: InputConnectionState[] = node.inputs.map((input, index) => ({
       hasIncomingConnection: input.connected,
       isBeingHovered: dragState.isDragging && dragState.hoveredNodeId === nodeId && dragState.hoveredInputId === input.id,
       isInTapZone: dragState.isDragging && dragState.hoveredNodeId === nodeId && dragState.hoveredInputId === input.id && dragState.isInTapZone,
@@ -411,27 +425,16 @@ const Canvas: React.FC = () => {
     if (shouldShowAdd) {
       states.push({
         hasIncomingConnection: false,
-        isBeingHovered: true,
-        isInTapZone: true,
+        isBeingHovered: dragState.isDragging && dragState.hoveredNodeId === nodeId && dragState.canCreateNewInput,
+        isInTapZone: dragState.isDragging && dragState.hoveredNodeId === nodeId && dragState.canCreateNewInput && dragState.isInTapZone,
         inputId: 'add-input',
         inputIndex: node.inputs.length,
         isAddInput: true,
         isDragging: dragState.isDragging
-      } as any);
+      });
     }
     
     return states;
-  };
-
-  // Function to check if mouse is over input connector (for hover effects)
-  const getInputHoverStates = (nodeId: string, mouseX: number, mouseY: number) => {
-    const node = nodes.find(n => n.id === nodeId);
-    if (!node) return [];
-    
-    return node.inputs.map((input, index) => ({
-      inputId: input.id,
-      isHovered: isPointInInputTapZone(mouseX, mouseY, node, index)
-    }));
   };
 
   return (
@@ -535,7 +538,6 @@ const Canvas: React.FC = () => {
               onStartConnection={handleStartConnection}
               onStartDisconnection={handleStartDisconnection}
               onRemoveInput={handleRemoveInput}
-              onAddInput={handleAddInput}
               inputConnectionStates={inputConnectionStates}
             />
           );
