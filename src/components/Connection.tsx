@@ -56,7 +56,7 @@ const Connection: React.FC<ConnectionProps> = ({
   return (
     <svg 
       className="absolute top-0 left-0 w-full h-full pointer-events-none" 
-      style={{ overflow: 'visible', zIndex: 1 }}
+      style={{ overflow: 'visible', zIndex: 0 }}
     >
       {showArrow && (
         <defs>
@@ -64,7 +64,7 @@ const Connection: React.FC<ConnectionProps> = ({
             id={`arrowhead-${isDragging ? 'blue' : 'gray'}`}
             markerWidth="6"
             markerHeight="6"
-            refX="5"
+                          refX="3"
             refY="3"
             orient="auto"
             markerUnits="strokeWidth"

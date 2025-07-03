@@ -75,28 +75,63 @@ const WorkflowNode: React.FC<WorkflowNodeProps> = ({
     }
   };
 
+  // Calculate original height (what the height would be without ADD input)
+  const calculateOriginalHeight = (inputCount: number) => {
+    const baseHeight = 48; // 48px base button height
+    if (inputCount <= 1) return baseHeight;
+    
+    // For multiple inputs: 8pt top margin + inputs with 8pt spacing + 8pt bottom margin
+    const inputHeight = 12; // Each input connector is 12px
+    const spacing = 8; // 8pt spacing between inputs
+    const margins = 16; // 8pt top + 8pt bottom
+    
+    return Math.max(baseHeight, (inputCount * inputHeight) + ((inputCount - 1) * spacing) + margins);
+  };
+
   const getInputPosition = (inputIndex: number) => {
-    const baseHeight = 48;
     const inputHeight = 12;
     const spacing = 8;
-    const topMargin = 8;
     
-    // For ADD input, position it after all existing inputs
-    const totalInputs = inputIndex >= inputs.length ? inputs.length + 1 : inputs.length;
+    // Keep existing inputs in their original positions when ADD appears
+    const originalInputCount = inputs.length;
     
-    if (totalInputs === 1) {
-      // Single input: center vertically in base node height
-      return {
-        top: baseHeight / 2 - inputHeight / 2 + 2
-      };
+    if (inputIndex >= originalInputCount) {
+      // This is the ADD input - position it after existing inputs
+      if (originalInputCount === 0) {
+        // First input (becoming ADD): center it in expanded height
+        return {
+          top: height / 2 - inputHeight / 2
+        };
+      } else {
+        // Position ADD input after existing inputs based on their original positions
+        const originalHeight = calculateOriginalHeight(originalInputCount);
+        const originalGroupHeight = (originalInputCount * inputHeight) + ((originalInputCount - 1) * spacing);
+        const originalGroupStartY = originalInputCount === 1 
+          ? originalHeight / 2 - inputHeight / 2  // Single input was centered in original height
+          : (originalHeight - originalGroupHeight) / 2;  // Multiple inputs were centered in original height
+        
+        return {
+          top: originalGroupStartY + originalInputCount * (inputHeight + spacing)
+        };
+      }
     } else {
-      // Multiple inputs: start from top margin (accounting for translateY(-6px))
-      // Always position based on the final layout, not transitional states
-      const startY = topMargin + 2; // Add 6px to account for translateY(-6px) to get visual 8pt top padding
+      // This is an existing input - keep it in original position based on original height
+      const originalHeight = calculateOriginalHeight(originalInputCount);
       
-      return {
-        top: startY + inputIndex * (inputHeight + spacing)
-      };
+      if (originalInputCount === 1) {
+        // Single input: center vertically in the original height
+        return {
+          top: originalHeight / 2 - inputHeight / 2
+        };
+      } else {
+        // Multiple inputs: center the original group vertically in the original height
+        const originalGroupHeight = (originalInputCount * inputHeight) + ((originalInputCount - 1) * spacing);
+        const originalGroupStartY = (originalHeight - originalGroupHeight) / 2;
+        
+        return {
+          top: originalGroupStartY + inputIndex * (inputHeight + spacing)
+        };
+      }
     }
   };
 
@@ -112,7 +147,6 @@ const WorkflowNode: React.FC<WorkflowNodeProps> = ({
     const { hasIncomingConnection, isInTapZone, isBeingHovered, inputId, inputIndex, isAddInput, isDragging } = connectionState;
     const inputPos = getInputPosition(inputIndex);
     const isHovered = hoveredInputId === inputId;
-    const tapZonePadding = 4; // +4pt padding on each side
 
     // Handle ADD input (virtual input when all are connected)
     if (isAddInput) {
@@ -123,10 +157,9 @@ const WorkflowNode: React.FC<WorkflowNodeProps> = ({
       return (
         <div 
           key={inputId}
-          className="absolute left-[-8px] z-[-2] flex items-center transition-all duration-300 ease-in-out"
+          className="absolute left-[0px] z-[-2] flex items-center transition-all duration-300 ease-in-out"
           style={{ 
             top: inputPos.top,
-            padding: `${tapZonePadding}px`,
             opacity: isActive ? 1 : 0.8, // Slightly fade in when becoming active
             transform: isActive ? 'translateX(0)' : 'translateX(-2px)' // Slide in slightly when active
           }}
@@ -139,7 +172,7 @@ const WorkflowNode: React.FC<WorkflowNodeProps> = ({
               height: `${rectHeight}px`, // Fixed height to match other inputs
               marginLeft: isActive ? '-6px' : '0px', // Grow 6px to the left when active (from 6px to 12px width)
               borderRadius: '1px',
-              transform: 'translateY(-6px)',
+              transform: 'translateY(0px)',
             }}
             onMouseEnter={() => setHoveredInputId(inputId)}
             onMouseLeave={() => setHoveredInputId(null)}
@@ -147,7 +180,7 @@ const WorkflowNode: React.FC<WorkflowNodeProps> = ({
           
           {/* ADD text - slide in animation */}
           <div 
-            className={`absolute right-[20px] top-[0px] text-blue-500 text-[10px] font-medium font-['IBM_Plex_Mono'] leading-[10px] uppercase tracking-wide cursor-pointer select-none whitespace-nowrap transition-all duration-300 ease-in-out ${
+            className={`absolute right-[20px] top-[2px] text-blue-500 text-[10px] font-medium font-['IBM_Plex_Mono'] leading-[10px] uppercase tracking-wide cursor-pointer select-none whitespace-nowrap transition-all duration-300 ease-in-out ${
               isActive
                 ? 'opacity-100 translate-x-0' 
                 : 'opacity-0 translate-x-2 pointer-events-none'
@@ -173,10 +206,9 @@ const WorkflowNode: React.FC<WorkflowNodeProps> = ({
         return (
           <div 
             key={inputId}
-            className="absolute left-[-8px] z-[-2] flex items-center transition-all duration-200 ease-in-out"
+            className="absolute left-[-4px] z-[-2] flex items-center transition-all duration-200 ease-in-out"
             style={{ 
-              top: inputPos.top,
-              padding: `${tapZonePadding}px`
+              top: inputPos.top
             }}
             onMouseDown={(e) => handleTriangleMouseDown(inputId, e)}
           >
@@ -188,7 +220,7 @@ const WorkflowNode: React.FC<WorkflowNodeProps> = ({
                 height: `${rectHeight}px`,
                 marginLeft: '-3px',
                 borderRadius: '1px',
-                transform: 'translateY(-6px)',
+                transform: 'translateY(0px)',
                 boxShadow: '0 2px 4px rgba(59, 130, 246, 0.3)' // Add shadow for better visual feedback
               }}
             ></div>
@@ -200,10 +232,9 @@ const WorkflowNode: React.FC<WorkflowNodeProps> = ({
         return (
           <div 
             key={inputId}
-            className="absolute left-[-15px] z-[-2] cursor-pointer transition-all duration-200 ease-in-out"
+            className="absolute left-[-12px] z-[-2] cursor-pointer transition-all duration-200 ease-in-out"
             style={{ 
-              top: inputPos.top,
-              padding: `${tapZonePadding}px` // Add tap zone padding
+              top: inputPos.top
             }}
             onMouseDown={(e) => handleTriangleMouseDown(inputId, e)}
           >
@@ -212,7 +243,7 @@ const WorkflowNode: React.FC<WorkflowNodeProps> = ({
               style={{
                 width: '12px',
                 height: '12px',
-                transform: 'translateY(-6px)',
+                transform: 'translateY(0px)',
                 clipPath: 'polygon(33% 0%, 33% 100%, 100% 50%)',
                 backgroundColor: isBeingHovered ? "#3b82f6" : "#6b7280",
                 borderRadius: '4px 0 0 4px',
@@ -232,10 +263,9 @@ const WorkflowNode: React.FC<WorkflowNodeProps> = ({
       return (
         <div 
           key={inputId}
-          className="absolute left-[-8px] z-[-2] flex items-center transition-all duration-200 ease-in-out"
+          className="absolute left-[-4px] z-[-2] flex items-center transition-all duration-200 ease-in-out"
           style={{ 
-            top: inputPos.top,
-            padding: `${tapZonePadding}px` // Add tap zone padding
+            top: inputPos.top
           }}
         >
           {/* Rectangle connector with enhanced visual feedback */}
@@ -248,7 +278,7 @@ const WorkflowNode: React.FC<WorkflowNodeProps> = ({
               height: `${rectHeight}px`,
               marginLeft: (isInTapZone || isBeingHovered || isHovered) ? '-3px' : '0px', // Adjusted for new width on any growth condition
               borderRadius: '1px',
-              transform: 'translateY(-6px)', // Center the rectangle (adjusted for 12px height)
+              transform: 'translateY(0px)', // Center the rectangle (adjusted for 12px height)
             }}
             onMouseEnter={() => setHoveredInputId(inputId)}
             onMouseLeave={() => setHoveredInputId(null)}
@@ -257,7 +287,7 @@ const WorkflowNode: React.FC<WorkflowNodeProps> = ({
           
           {/* Delete text - enhanced slide in animation */}
           <div 
-            className={`absolute right-[20px] top-[0px] text-red-600 text-[10px] font-medium font-['IBM_Plex_Mono'] leading-[10px] uppercase tracking-wide cursor-pointer select-none whitespace-nowrap transition-all duration-200 ease-in-out ${
+            className={`absolute right-[20px] top-[2px] text-red-600 text-[10px] font-medium font-['IBM_Plex_Mono'] leading-[10px] uppercase tracking-wide cursor-pointer select-none whitespace-nowrap transition-all duration-200 ease-in-out ${
               shouldShowDelete
                 ? 'opacity-100 translate-x-0' 
                 : 'opacity-0 translate-x-3 pointer-events-none'

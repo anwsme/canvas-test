@@ -116,25 +116,62 @@ const Canvas: React.FC = () => {
     return Math.max(baseHeight, (inputCount * inputHeight) + ((inputCount - 1) * spacing) + margins);
   };
 
+  // Centralized function to get the effective height for a node given current drag state
+  const getNodeHeight = (node: NodeData) => {
+    const allInputsConnected = node.inputs.every(input => input.connected);
+    const shouldShowAdd = dragState.isDragging && 
+                         dragState.hoveredNodeId === node.id && 
+                         dragState.canCreateNewInput && 
+                         allInputsConnected;
+    const effectiveInputCount = shouldShowAdd ? node.inputs.length + 1 : node.inputs.length;
+    return calculateNodeHeight(effectiveInputCount);
+  };
+
   const getInputPosition = (node: NodeData, inputIndex: number) => {
-    const baseHeight = 48;
     const inputHeight = 12;
     const spacing = 8;
-    const topMargin = 8;
     
-    if (node.inputs.length === 1) {
-      // Single input: center on triangle (positioned at left-[-15px] + 6px = -9px from node)
-      return {
-        x: node.x - 8,
-        y: node.y + baseHeight / 2 - inputHeight / 2 + 6 // Match WorkflowNode calculation
-      };
-          } else {
-        // Multiple inputs: center on triangles positioned from top margin (accounting for translateY(-6px))
-        return {
-          x: node.x - 8,
-          y: node.y + topMargin + 2 + inputIndex * (inputHeight + spacing) + inputHeight / 2 - 2
-        };
+    // Keep existing inputs in their original positions when ADD appears
+    const originalInputCount = node.inputs.length;
+    
+    let relativeTop;
+    if (inputIndex >= originalInputCount) {
+      // This is the ADD input - position it after existing inputs
+      if (originalInputCount === 0) {
+        // First input (becoming ADD): center it in expanded node
+        const expandedHeight = getNodeHeight(node);
+        relativeTop = expandedHeight / 2 - inputHeight / 2;
+      } else {
+        // Position ADD input after existing inputs based on their original positions
+        const originalHeight = calculateNodeHeight(originalInputCount);
+        const originalGroupHeight = (originalInputCount * inputHeight) + ((originalInputCount - 1) * spacing);
+        const originalGroupStartY = originalInputCount === 1 
+          ? originalHeight / 2 - inputHeight / 2  // Single input was centered in original height
+          : (originalHeight - originalGroupHeight) / 2;  // Multiple inputs were centered in original height
+        
+        relativeTop = originalGroupStartY + originalInputCount * (inputHeight + spacing);
       }
+    } else {
+      // This is an existing input - keep it in original position based on original height
+      const originalHeight = calculateNodeHeight(originalInputCount);
+      
+      if (originalInputCount === 1) {
+        // Single input: center vertically in the original node height
+        relativeTop = originalHeight / 2 - inputHeight / 2;
+      } else {
+        // Multiple inputs: center the original group vertically in the original node height
+        const originalGroupHeight = (originalInputCount * inputHeight) + ((originalInputCount - 1) * spacing);
+        const originalGroupStartY = (originalHeight - originalGroupHeight) / 2;
+        
+        relativeTop = originalGroupStartY + inputIndex * (inputHeight + spacing);
+      }
+    }
+    
+    // Convert to absolute coordinates (matching WorkflowNode's triangle positioning)
+    return {
+      x: node.x - 8,
+      y: node.y + relativeTop + inputHeight / 2  // Add inputHeight/2 to get center of triangle
+    };
   };
 
   const handleStartConnection = useCallback((nodeId: string, event: React.MouseEvent) => {
@@ -213,28 +250,32 @@ const Canvas: React.FC = () => {
 
 
   const isPointInNodeTapZone = useCallback((mouseX: number, mouseY: number, node: NodeData) => {
-    const tapZoneSize = 72; // 1.5x the 48px node size
-    const nodeHeight = calculateNodeHeight(node.inputs.length);
+    // Use centralized height calculation
+    const nodeHeight = getNodeHeight(node);
+    
+    const horizontalZoneWidth = 120; // Extended horizontal zone
+    const verticalZoneHeight = 16; // Thin vertical zone
     
     return (
-      mouseX >= node.x - tapZoneSize / 2 &&
-      mouseX <= node.x + 48 + tapZoneSize / 2 &&
-      mouseY >= node.y - tapZoneSize / 2 &&
-      mouseY <= node.y + nodeHeight + tapZoneSize / 2
+      mouseX >= node.x - horizontalZoneWidth &&
+      mouseX <= node.x + 48 + horizontalZoneWidth &&
+      mouseY >= node.y - verticalZoneHeight / 2 &&
+      mouseY <= node.y + nodeHeight + verticalZoneHeight / 2
     );
-  }, []);
+  }, [dragState]);
 
   const isPointInInputZone = useCallback((mouseX: number, mouseY: number, node: NodeData, inputIndex: number) => {
-    const tapZoneSize = 72; // 1.5x the 48px node size
     const inputPos = getInputPosition(node, inputIndex);
+    const horizontalZoneWidth = 120; // Extended horizontal zone for easier targeting
+    const verticalZoneHeight = 16; // Thin vertical zone around input
     
     return (
-      mouseX >= inputPos.x - tapZoneSize / 2 &&
-      mouseX <= inputPos.x + tapZoneSize / 2 &&
-      mouseY >= inputPos.y - tapZoneSize / 2 &&
-      mouseY <= inputPos.y + tapZoneSize / 2
+      mouseX >= node.x - horizontalZoneWidth &&
+      mouseX <= node.x + 48 + horizontalZoneWidth &&
+      mouseY >= inputPos.y - verticalZoneHeight / 2 &&
+      mouseY <= inputPos.y + verticalZoneHeight / 2
     );
-  }, []);
+  }, [dragState]);
 
 
 
@@ -388,8 +429,9 @@ const Canvas: React.FC = () => {
 
   const getConnectorPosition = (node: NodeData, type: 'output' | 'input', inputIndex?: number) => {
     if (type === 'output') {
-      // Circle center calculation - now properly centered based on node height
-      const nodeHeight = calculateNodeHeight(node.inputs.length);
+      // Circle center calculation - use centralized height calculation
+      const nodeHeight = getNodeHeight(node);
+      
       return {
         x: node.x + 42 + 6, // Center of the 12px circle
         y: node.y + nodeHeight / 2  // Centered vertically in the node
@@ -437,6 +479,8 @@ const Canvas: React.FC = () => {
     return states;
   };
 
+
+
   return (
     <div 
       ref={canvasRef}
@@ -465,6 +509,7 @@ const Canvas: React.FC = () => {
           
           if (!fromNode || !toNode) return null;
           
+          // Recalculate positions on every render when drag state changes
           const startPos = getConnectorPosition(fromNode, 'output');
           const toInputIndex = toNode.inputs.findIndex(input => input.id === conn.toInputId);
           const endPos = getConnectorPosition(toNode, 'input', toInputIndex);
@@ -475,7 +520,7 @@ const Canvas: React.FC = () => {
           
           return (
             <Connection
-              key={conn.id}
+              key={`${conn.id}-${dragState.hoveredNodeId}-${dragState.canCreateNewInput}`}
               startX={startPos.x}
               startY={startPos.y}
               endX={endPos.x}
@@ -513,16 +558,8 @@ const Canvas: React.FC = () => {
         {nodes.map(node => {
           const inputConnectionStates = getInputConnectionStates(node.id);
           
-          // Check if we should show ADD input (virtual input) and expand node
-          const allInputsConnected = node.inputs.every(input => input.connected);
-          const shouldShowAdd = dragState.isDragging && 
-                               dragState.hoveredNodeId === node.id && 
-                               dragState.canCreateNewInput && 
-                               allInputsConnected;
-          
-          // Calculate height including virtual ADD input if shown
-          const effectiveInputCount = shouldShowAdd ? node.inputs.length + 1 : node.inputs.length;
-          const nodeHeight = calculateNodeHeight(effectiveInputCount);
+          // Use centralized height calculation
+          const nodeHeight = getNodeHeight(node);
           
           return (
             <WorkflowNode
