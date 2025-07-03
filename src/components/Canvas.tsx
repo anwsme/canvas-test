@@ -123,8 +123,24 @@ const Canvas: React.FC = () => {
                          dragState.hoveredNodeId === node.id && 
                          dragState.canCreateNewInput && 
                          allInputsConnected;
-    const effectiveInputCount = shouldShowAdd ? node.inputs.length + 1 : node.inputs.length;
-    return calculateNodeHeight(effectiveInputCount);
+    
+    let baseHeight;
+    if (shouldShowAdd) {
+      // When showing ADD input
+      if (node.inputs.length === 1) {
+        // Adding SECOND input: add 12px to original height for preview
+        baseHeight = calculateNodeHeight(node.inputs.length) + 12;
+      } else {
+        // Adding beyond second input: use standard calculation
+        const effectiveInputCount = node.inputs.length + 1;
+        baseHeight = calculateNodeHeight(effectiveInputCount);
+      }
+    } else {
+      // Normal state: use actual input count
+      baseHeight = calculateNodeHeight(node.inputs.length);
+    }
+    
+    return baseHeight;
   };
 
   const getInputPosition = (node: NodeData, inputIndex: number) => {

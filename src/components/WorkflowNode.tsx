@@ -180,7 +180,7 @@ const WorkflowNode: React.FC<WorkflowNodeProps> = ({
           
           {/* ADD text - slide in animation */}
           <div 
-            className={`absolute right-[20px] top-[2px] text-blue-500 text-[10px] font-medium font-['IBM_Plex_Mono'] leading-[10px] uppercase tracking-wide cursor-pointer select-none whitespace-nowrap transition-all duration-300 ease-in-out ${
+            className={`absolute right-[20px] top-[1px] text-blue-500 text-[10px] font-medium font-['IBM_Plex_Mono'] leading-[10px] uppercase tracking-wide cursor-pointer select-none whitespace-nowrap transition-all duration-300 ease-in-out ${
               isActive
                 ? 'opacity-100 translate-x-0' 
                 : 'opacity-0 translate-x-2 pointer-events-none'
@@ -287,7 +287,7 @@ const WorkflowNode: React.FC<WorkflowNodeProps> = ({
           
           {/* Delete text - enhanced slide in animation */}
           <div 
-            className={`absolute right-[20px] top-[2px] text-red-600 text-[10px] font-medium font-['IBM_Plex_Mono'] leading-[10px] uppercase tracking-wide cursor-pointer select-none whitespace-nowrap transition-all duration-200 ease-in-out ${
+            className={`absolute right-[20px] top-[1px] text-red-600 text-[10px] font-medium font-['IBM_Plex_Mono'] leading-[10px] uppercase tracking-wide cursor-pointer select-none whitespace-nowrap transition-all duration-200 ease-in-out ${
               shouldShowDelete
                 ? 'opacity-100 translate-x-0' 
                 : 'opacity-0 translate-x-3 pointer-events-none'
